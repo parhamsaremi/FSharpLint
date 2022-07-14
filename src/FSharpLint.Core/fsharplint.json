@@ -274,6 +274,10 @@
         }
     },
     "avoidTooShortNames": { "enabled": false },
+    "indexGet": { 
+        "enabled": false,
+        "type": "Ocaml"
+    },
     "indentation": {
         "enabled": false
     },

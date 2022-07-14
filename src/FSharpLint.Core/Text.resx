@@ -177,6 +177,9 @@
   <data name="RulesAvoidTooShortNamesError" xml:space="preserve">
     <value>Consider using a longer name, as it is currently too short.</value>
   </data>
+  <data name="RulesIndexGet" xml:space="preserve">
+    <value>Consider changing the `get` element.</value>
+  </data>
   <data name="RulesNamingConventionsPrefixError" xml:space="preserve">
     <value>Consider changing `{0}` to be prefixed with `{1}`.</value>
   </data>
