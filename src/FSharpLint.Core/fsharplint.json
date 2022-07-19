@@ -275,7 +275,10 @@
     },
     "avoidTooShortNames": { "enabled": false },
     "indexGet": { 
-        "enabled": false
+        "enabled": false,
+        "config": {
+            "type": "OCaml"
+        }
     },
     "indentation": {
         "enabled": false

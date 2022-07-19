@@ -6,20 +6,8 @@ open FSharpLint.Rules.IndexGet
 open FSharpLint.Rules
 
 [<TestFixture>]
-type TestConventionsIndexGet() =
-    inherit TestAstNodeRuleBase.TestAstNodeRuleBase(IndexGet.rule)
-    
-//     //detect error for OCaml style
-//     [<Test>]
-//     member this.IndexGetCSharpStyleWhenUsingOCaml() =
-//         this.Parse """
-// module Program
-
-// let someArray = [| "foo" ; "bar" |]
-// let bar = someArray[1]
-// System.Console.WriteLine bar"""
-
-//         Assert.IsTrue this.ErrorsExist
+type TestConventionsIndexGetCSharp() =
+    inherit TestAstNodeRuleBase.TestAstNodeRuleBase(IndexGet.rule {Type="CSharp"})
     
     [<Test>]
     member this.IndexGetOCamlStyleWhenUsingCSharp() =
@@ -32,25 +20,39 @@ System.Console.WriteLine bar"""
 
         Assert.IsTrue this.ErrorsExist
     
-//     [<Test>]
-//     member this.IndexGetCSharpStyleWhenUsingCSharp() =
-//         this.Parse """
-// module Program
+    [<Test>]
+    member this.IndexGetCSharpStyleWhenUsingCSharp() =
+        this.Parse """
+module Program
 
-// let someArray = [| "foo" ; "bar" |]
-// let bar = someArray[1]
-// System.Console.WriteLine bar"""
+let someArray = [| "foo" ; "bar" |]
+let bar = someArray[1]
+System.Console.WriteLine bar"""
 
-//         Assert.IsTrue this.NoErrorsExist
+        Assert.IsTrue this.NoErrorsExist
 
-//correct format for OCaml style
-//     [<Test>]
-//     member this.IndexGetOCamlStyleWhenUsingOCaml() =
-//         this.Parse """
-// module Program
+[<TestFixture>]
+type TestConventionsIndexGetOCaml() =
+    inherit TestAstNodeRuleBase.TestAstNodeRuleBase(IndexGet.rule {Type="OCaml"})
 
-// let someArray = [| "foo" ; "bar" |]
-// let bar = someArray.[1]
-// System.Console.WriteLine bar"""
+    [<Test>]
+    member this.IndexGetCSharpStyleWhenUsingOCaml() =
+        this.Parse """
+module Program
 
-//         Assert.IsTrue this.NoErrorsExist
+let someArray = [| "foo" ; "bar" |]
+let bar = someArray[1]
+System.Console.WriteLine bar"""
+
+        Assert.IsTrue this.ErrorsExist
+
+    [<Test>]
+    member this.IndexGetOCamlStyleWhenUsingOCaml() =
+        this.Parse """
+module Program
+
+let someArray = [| "foo" ; "bar" |]
+let bar = someArray.[1]
+System.Console.WriteLine bar"""
+
+        Assert.IsTrue this.NoErrorsExist
