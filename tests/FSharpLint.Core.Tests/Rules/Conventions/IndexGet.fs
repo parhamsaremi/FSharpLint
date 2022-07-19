@@ -9,28 +9,28 @@ open FSharpLint.Rules
 type TestConventionsIndexGet() =
     inherit TestAstNodeRuleBase.TestAstNodeRuleBase(IndexGet.rule)
     
-    //detect error for OCaml style
-    [<Test>]
-    member this.IndexGetCSharpStyleWhenUsingOCaml() =
-        this.Parse """
-module Program
-
-let someArray = [| "foo" ; "bar" |]
-let bar = someArray[1]
-System.Console.WriteLine bar"""
-
-        Assert.IsTrue this.ErrorsExist
-    
+//     //detect error for OCaml style
 //     [<Test>]
-//     member this.IndexGetOCamlStyleWhenUsingCSharp() =
+//     member this.IndexGetCSharpStyleWhenUsingOCaml() =
 //         this.Parse """
 // module Program
 
 // let someArray = [| "foo" ; "bar" |]
-// let bar = someArray.[1]
+// let bar = someArray[1]
 // System.Console.WriteLine bar"""
 
 //         Assert.IsTrue this.ErrorsExist
+    
+    [<Test>]
+    member this.IndexGetOCamlStyleWhenUsingCSharp() =
+        this.Parse """
+module Program
+
+let someArray = [| "foo" ; "bar" |]
+let bar = someArray.[1]
+System.Console.WriteLine bar"""
+
+        Assert.IsTrue this.ErrorsExist
     
 //     [<Test>]
 //     member this.IndexGetCSharpStyleWhenUsingCSharp() =
@@ -44,13 +44,13 @@ System.Console.WriteLine bar"""
 //         Assert.IsTrue this.NoErrorsExist
 
 //correct format for OCaml style
-    [<Test>]
-    member this.IndexGetOCamlStyleWhenUsingOCaml() =
-        this.Parse """
-module Program
+//     [<Test>]
+//     member this.IndexGetOCamlStyleWhenUsingOCaml() =
+//         this.Parse """
+// module Program
 
-let someArray = [| "foo" ; "bar" |]
-let bar = someArray.[1]
-System.Console.WriteLine bar"""
+// let someArray = [| "foo" ; "bar" |]
+// let bar = someArray.[1]
+// System.Console.WriteLine bar"""
 
-        Assert.IsTrue this.NoErrorsExist
+//         Assert.IsTrue this.NoErrorsExist

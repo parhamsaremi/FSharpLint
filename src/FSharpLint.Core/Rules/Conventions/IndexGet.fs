@@ -7,7 +7,7 @@ open FSharpLint.Framework.Rules
 open FSharpLint.Framework.Suggestion
 
 let runner (args:AstNodeRuleParams) =
-    let styleType = "OCaml"
+    let styleType = "CSharp"
     if styleType.Equals("OCaml") then
         match args.AstNode with
         | AstNode.Binding binding ->
