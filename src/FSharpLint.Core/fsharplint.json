@@ -276,7 +276,9 @@
     "avoidTooShortNames": { "enabled": false },
     "indexGet": { 
         "enabled": false,
-        "type": "Ocaml"
+        "config": {
+            "type": "OCaml"
+        }
     },
     "indentation": {
         "enabled": false
