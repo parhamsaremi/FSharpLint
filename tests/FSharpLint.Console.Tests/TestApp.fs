@@ -121,8 +121,8 @@ module Fall =
         """
         let ruleName = "RedundantNewKeyword"
         use input = new TemporaryFile(sourceCode, "fs")
-        let (returnCode, errors) = main [| "fix"; ruleName; input.FileName |]
+        let (exitCode, errors) = main [| "fix"; ruleName; input.FileName |]
 
-        Assert.AreEqual(-1, returnCode)
+        Assert.AreEqual(0, exitCode)
         Assert.AreEqual(set ["Usage of `new` keyword here is redundant."], errors)
         Assert.AreEqual(expected, File.ReadAllText input.FileName)
