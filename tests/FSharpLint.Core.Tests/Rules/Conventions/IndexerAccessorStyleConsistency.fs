@@ -7,7 +7,7 @@ open FSharpLint.Rules
 
 [<TestFixture>]
 type TestConventionsIndexerAccessorStyleConsistencyCSharp() =
-    inherit TestAstNodeRuleBase.TestAstNodeRuleBase(IndexerAccessorStyleConsistency.rule {Style="CSharp"})
+    inherit TestAstNodeRuleBase.TestAstNodeRuleBase(IndexerAccessorStyleConsistency.rule { Style = "CSharp" })
     
     [<Test>]
     member this.IndexerAccessorStyleConsistencyOCamlStyleWhenUsingCSharp() =
@@ -33,7 +33,7 @@ System.Console.WriteLine bar"""
 
 [<TestFixture>]
 type TestConventionsIndexerAccessorStyleConsistencyOCaml() =
-    inherit TestAstNodeRuleBase.TestAstNodeRuleBase(IndexerAccessorStyleConsistency.rule {Style="OCaml"})
+    inherit TestAstNodeRuleBase.TestAstNodeRuleBase(IndexerAccessorStyleConsistency.rule { Style = "OCaml" })
 
     [<Test>]
     member this.IndexerAccessorStyleConsistencyCSharpStyleWhenUsingOCaml() =
