@@ -274,10 +274,10 @@
         }
     },
     "avoidTooShortNames": { "enabled": false },
-    "indexGet": { 
+    "indexerAccessorStyleConsistency": { 
         "enabled": false,
         "config": {
-            "type": "OCaml"
+            "style": "OCaml"
         }
     },
     "indentation": {
