@@ -103,30 +103,35 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         output.WriteError str
         exitCode <- -1
 
-    let handleLintResult (maybeRuleName: option<string>) = function
+    let outputWarnings (warnings:list<Suggestion.LintWarning>) =
+        String.Format(Resources.GetString("ConsoleFinished"), List.length warnings)
+            |> output.WriteInfo
+    
+    let handleLintResult = function
         | LintResult.Success(warnings) ->
-            match maybeRuleName with
-            | Some _ -> Resources.GetString "ConsoleApplyingSuggestedFixFile" |> output.WriteInfo
-            | None -> ()
-
+            outputWarnings warnings
+            if List.isEmpty warnings |> not then 
+               exitCode <- -1
+        | LintResult.Failure failure -> handleError failure.Description
+    
+    let handleFixResult (ruleName: string) = function
+        | LintResult.Success(warnings) ->
+            Resources.GetString "ConsoleApplyingSuggestedFixFile" |> output.WriteInfo
             List.iter (fun (element: Suggestion.LintWarning) ->
                 let sourceCode = File.ReadAllText element.FilePath
-                match element.Details.SuggestedFix, maybeRuleName with
-                | Some suggestedFix, Some ruleName when ruleName.Contains element.RuleName ->
+                match element.Details.SuggestedFix with
+                | Some suggestedFix when ruleName.Contains element.RuleName ->
                     suggestedFix.Force()
                     |> Option.map (fun suggestedFix ->
                         let updatedSourceCode = sourceCode.Replace(suggestedFix.FromText, suggestedFix.ToText)
                         File.WriteAllText(element.FilePath, updatedSourceCode, Encoding.UTF8)) |> ignore
                 | _ -> ()) warnings
-            String.Format(Resources.GetString("ConsoleFinished"), List.length warnings)
-            |> output.WriteInfo
+            outputWarnings warnings
             if List.isEmpty warnings |> not then 
-                match maybeRuleName with
-                | Some _ -> exitCode <- 0
-                | None -> exitCode <- -1
+                exitCode <- 0
         | LintResult.Failure failure -> handleError failure.Description
 
-    let linting fileType lintParams target toolsPath maybeRuleName =
+    let linting fileType lintParams target toolsPath shouldFix maybeRuleName =
         try
             let lintResult =
                 match fileType with
@@ -135,7 +140,12 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
                 | FileType.Solution -> Lint.lintSolution lintParams target toolsPath
                 | FileType.Project
                 | _ -> Lint.lintProject lintParams target toolsPath
-            handleLintResult maybeRuleName lintResult
+            if shouldFix then
+                match maybeRuleName with
+                | Some ruleName -> handleFixResult ruleName lintResult
+                | None -> exitCode <- 1
+            else
+                handleLintResult lintResult
         with
         | e ->
             let target = if fileType = FileType.Source then "source" else target
@@ -160,7 +170,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         let target = lintArgs.GetResult Target
         let fileType = lintArgs.TryGetResult File_Type |> Option.defaultValue (inferFileType target)
 
-        linting fileType lintParams target toolsPath None
+        linting fileType lintParams target toolsPath false None
 
     let applySuggestedFix (fixArgs: ParseResults<FixArgs>) =
         let fixConfig = fixArgs.TryGetResult Fix_Config
@@ -169,7 +179,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         let ruleName, target = fixArgs.GetResult Fix_Target
         let fileType = fixArgs.TryGetResult Fix_File_Type |> Option.defaultValue (inferFileType target)
 
-        linting fileType fixParams target toolsPath (Some ruleName)
+        linting fileType fixParams target toolsPath true (Some ruleName)
 
     match arguments.GetSubCommand() with
     | Lint lintArgs -> applyLint lintArgs
