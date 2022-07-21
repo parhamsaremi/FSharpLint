@@ -371,7 +371,7 @@ module Lint =
     }
 
     /// Gets a FSharpLint Configuration based on the provided ConfigurationParam.
-    let private getConfig (configParam:ConfigurationParam) =
+    let getConfig (configParam:ConfigurationParam) =
         match configParam with
         | Configuration config -> Ok config
         | FromFile filePath ->

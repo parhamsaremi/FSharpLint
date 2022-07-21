@@ -126,3 +126,31 @@ module Fall =
         Assert.AreEqual(0, exitCode)
         Assert.AreEqual(set ["Usage of `new` keyword here is redundant."], errors)
         Assert.AreEqual(expected, File.ReadAllText input.FileName)
+
+    [<Test>]
+    member __.``Lint source with fix option with wrong rulename``() =
+        let sourceCode = """
+printfn "Hello"
+        """
+
+        let ruleName = "ssrffss"
+        use input = new TemporaryFile(sourceCode, "fs")
+        let (exitCode, errors) = main [| "fix"; ruleName; input.FileName |]
+
+        Assert.AreEqual(1, exitCode)
+    
+    [<Test>]
+    member __.``Lint source with fix option with no suggestion rule``() =
+        let sourceCode = """
+ try
+     foo ()
+ with
+ | ex ->
+     if someCondition then
+         raise ex """
+
+        let ruleName = "FavourReRaise"
+        use input = new TemporaryFile(sourceCode, "fs")
+        let (exitCode, errors) = main [| "fix"; ruleName; input.FileName |]
+
+        Assert.AreEqual(2, exitCode)
