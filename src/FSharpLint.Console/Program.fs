@@ -116,18 +116,21 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
     
     let handleFixResult (ruleName: string) = function
         | LintResult.Success(warnings) ->
+            let mutable count = 0
             Resources.GetString "ConsoleApplyingSuggestedFixFile" |> output.WriteInfo
             List.iter (fun (element: Suggestion.LintWarning) ->
                 let sourceCode = File.ReadAllText element.FilePath
                 match element.Details.SuggestedFix with
-                | Some suggestedFix when ruleName.Contains element.RuleName ->
+                | Some suggestedFix when String.Equals(ruleName, element.RuleName, StringComparison.InvariantCultureIgnoreCase) ->
                     suggestedFix.Force()
                     |> Option.map (fun suggestedFix ->
                         let updatedSourceCode = sourceCode.Replace(suggestedFix.FromText, suggestedFix.ToText)
                         File.WriteAllText(element.FilePath, updatedSourceCode, Encoding.UTF8)) |> ignore
-                | _ -> ()) warnings
+                | _ -> count <- count + 1) warnings
             outputWarnings warnings
-            if List.isEmpty warnings |> not then 
+            if count > 0 then
+                exitCode <- 1
+            else
                 exitCode <- 0
         | LintResult.Failure failure -> handleError failure.Description
 
@@ -178,7 +181,6 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         let fixParams = getParams fixConfig
         let ruleName, target = fixArgs.GetResult Fix_Target
         let fileType = fixArgs.TryGetResult Fix_File_Type |> Option.defaultValue (inferFileType target)
-
         linting fileType fixParams target toolsPath true (Some ruleName)
 
     match arguments.GetSubCommand() with
