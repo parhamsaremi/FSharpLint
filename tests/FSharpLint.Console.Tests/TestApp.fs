@@ -126,3 +126,34 @@ module Fall =
         Assert.AreEqual(0, exitCode)
         Assert.AreEqual(set ["Usage of `new` keyword here is redundant."], errors)
         Assert.AreEqual(expected, File.ReadAllText input.FileName)
+
+    [<Test>]
+    member __.``Lint source with fix option with wrong rulename``() =
+        let sourceCode = """
+printfn "Hello"
+        """
+
+        let ruleName = "ssrffss"
+        use input = new TemporaryFile(sourceCode, "fs")
+        let (exitCode, errors) = main [| "fix"; ruleName; input.FileName |]
+
+        Assert.AreEqual(1, exitCode)
+
+    [<Test>]
+    member __.``Lint source with fix option no need for fix``() =
+        let sourceCode = """
+module Fass =
+    let foo = System.Collections.Generic.Dictionary<string, string>() |> ignore
+    let goo = Guid() |> ignore
+    let ntoo = Int32() |> ignore
+module Fall =
+    let uoo = Uid() |> ignore
+    let version =  System.Version()
+    let xoo = Uint32() |> ignore
+        """
+        let ruleName = "RedundantNewKeyword"
+        use input = new TemporaryFile(sourceCode, "fs")
+        let (exitCode, errors) = main [| "fix"; ruleName; input.FileName |]
+
+        Assert.AreEqual(0, exitCode)
+        Assert.AreEqual(sourceCode, File.ReadAllText input.FileName)

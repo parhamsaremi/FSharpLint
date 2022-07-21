@@ -6,6 +6,7 @@ open System.IO
 open System.Text
 open FSharpLint.Framework
 open FSharpLint.Application
+open System.Linq
 
 /// Output format the linter will use.
 type private OutputFormat =
@@ -99,9 +100,9 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         | Some _
         | None -> Output.StandardOutput() :> Output.IOutput
 
-    let handleError (str:string) =
+    let handleError (status:int) (str:string) =
         output.WriteError str
-        exitCode <- -1
+        exitCode <- status
 
     let outputWarnings (warnings: List<Suggestion.LintWarning>) =
         String.Format(Resources.GetString "ConsoleFinished", List.length warnings)
@@ -112,24 +113,39 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
             outputWarnings warnings
             if List.isEmpty warnings |> not then 
                exitCode <- -1
-        | LintResult.Failure failure -> handleError failure.Description
+        | LintResult.Failure failure -> handleError -1 failure.Description
     
     let handleFixResult (ruleName: string) = function
         | LintResult.Success warnings ->
             Resources.GetString "ConsoleApplyingSuggestedFixFile" |> output.WriteInfo
-            List.iter (fun (element: Suggestion.LintWarning) ->
-                let sourceCode = File.ReadAllText element.FilePath
-                match element.Details.SuggestedFix with
-                | Some suggestedFix when String.Equals(ruleName, element.RuleName, StringComparison.InvariantCultureIgnoreCase) ->
-                    suggestedFix.Force()
-                    |> Option.map (fun suggestedFix ->
-                        let updatedSourceCode = sourceCode.Replace(suggestedFix.FromText, suggestedFix.ToText)
-                        File.WriteAllText(element.FilePath, updatedSourceCode, Encoding.UTF8)) |> ignore
-                | _ -> ()) warnings
+            let increment = 1
+            let noFixIncrement = 0
+            let countSuggestedFix = 
+                List.fold (fun acc elem -> acc + elem) 0 (
+                    List.map (fun (element: Suggestion.LintWarning) ->
+                        let sourceCode = File.ReadAllText element.FilePath
+                        if String.Equals(ruleName, element.RuleName, StringComparison.InvariantCultureIgnoreCase) then
+                            match element.Details.SuggestedFix with
+                            | Some suggestedFix ->
+                                suggestedFix.Force()
+                                |> Option.map (fun suggestedFix ->
+                                    let updatedSourceCode = 
+                                        sourceCode.Replace(
+                                            suggestedFix.FromText,
+                                            suggestedFix.ToText
+                                        )
+                                    File.WriteAllText(
+                                        element.FilePath,
+                                        updatedSourceCode,
+                                        Encoding.UTF8)
+                                    ) 
+                                    |> ignore |> fun () -> increment
+                            | None -> noFixIncrement
+                        else
+                            noFixIncrement) warnings)
             outputWarnings warnings
-            if List.isEmpty warnings |> not then 
-                exitCode <- 0
-        | LintResult.Failure failure -> handleError failure.Description
+
+        | LintResult.Failure failure -> handleError -1 failure.Description
 
     let linting fileType lintParams target toolsPath shouldFix maybeRuleName =
         try
@@ -150,7 +166,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         | e ->
             let target = if fileType = FileType.Source then "source" else target
             sprintf "Lint failed while analysing %s.\nFailed with: %s\nStack trace: %s" target e.Message e.StackTrace
-            |> handleError
+            |> (handleError -1)
 
     let getParams config =
         let paramConfig =
@@ -176,8 +192,26 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         let fixParams = getParams None
         let ruleName, target = fixArgs.GetResult Fix_Target
         let fileType = fixArgs.TryGetResult Fix_File_Type |> Option.defaultValue (inferFileType target)
+        
+        let allRules = 
+            match getConfig fixParams.Configuration with
+            | Ok config -> Some (Configuration.flattenConfig config false)
+            | _ -> None
 
-        linting fileType fixParams target toolsPath true (Some ruleName)
+        let allRuleNames =
+            match allRules with
+            | Some rules ->  (fun (loadedRules:Configuration.LoadedRules) -> ([|
+                loadedRules.LineRules.IndentationRule |> Option.map (fun rule -> rule.Name) |> Option.toArray
+                loadedRules.LineRules.NoTabCharactersRule |> Option.map (fun rule -> rule.Name) |> Option.toArray
+                loadedRules.LineRules.GenericLineRules |> Array.map (fun rule -> rule.Name)
+                loadedRules.AstNodeRules |> Array.map (fun rule -> rule.Name)
+                |] |> Array.concat |> Set.ofArray)) rules
+            | _ -> Set.empty
+
+        if allRuleNames.Any(fun aRuleName -> String.Equals(aRuleName, ruleName, StringComparison.InvariantCultureIgnoreCase)) then
+            linting fileType fixParams target toolsPath true (Some ruleName)
+        else
+            sprintf "Rule '%s' does not exist." ruleName |> (handleError 1)
 
     match arguments.GetSubCommand() with
     | Lint lintArgs -> applyLint lintArgs
