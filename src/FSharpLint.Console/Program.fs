@@ -120,7 +120,10 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
                 | _ -> ()) warnings
             String.Format(Resources.GetString("ConsoleFinished"), List.length warnings)
             |> output.WriteInfo
-            if List.isEmpty warnings |> not then exitCode <- 0
+            if List.isEmpty warnings |> not then 
+                match maybeRuleName with
+                | Some _ -> exitCode <- 0
+                | None -> exitCode <- -1
         | LintResult.Failure failure -> handleError failure.Description
 
     let linting fileType lintParams target toolsPath maybeRuleName =
