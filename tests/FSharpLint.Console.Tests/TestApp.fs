@@ -170,3 +170,46 @@ printfn "Hello"
         let (exitCode, errors) = main [| "fix"; ruleName; input.FileName; "--check" |]
 
         Assert.AreEqual(2, exitCode)
+
+    [<Test>]
+    member __.``Lint source with fix check option with wrong rulename 22222``() =
+        let sourceCode = """
+printfn "Hello"
+        """
+
+        let ruleName = "ssrffss"
+        use input = new TemporaryFile(sourceCode, "fs")
+        let (exitCode, errors) = main [| "fix"; ruleName; input.FileName; "--check" |]
+
+        Assert.AreEqual(1, exitCode)
+
+    [<Test>]
+    member __.``Lint source with fix check option 22223``() =
+        let sourceCode = """
+module Fass =
+    let foo = new System.Collections.Generic.Dictionary<string, string>() |> ignore
+    let goo = new Guid() |> ignore
+    let ntoo = new Int32() |> ignore
+module Fall =
+    let uoo = new Uid() |> ignore
+    let version =  new System.Version()
+    let xoo = new Uint32() |> ignore
+        """
+
+        let expected = """
+module Fass =
+    let foo = new System.Collections.Generic.Dictionary<string, string>() |> ignore
+    let goo = new Guid() |> ignore
+    let ntoo = new Int32() |> ignore
+module Fall =
+    let uoo = new Uid() |> ignore
+    let version =  new System.Version()
+    let xoo = new Uint32() |> ignore
+        """
+        let ruleName = "RedundantNewKeyword"
+        use input = new TemporaryFile(sourceCode, "fs")
+        let (exitCode, errors) = main [| "fix"; ruleName; input.FileName; "--check" |]
+
+        Assert.AreEqual(0, exitCode)
+        Assert.AreEqual(set ["Usage of `new` keyword here is redundant."], errors)
+        Assert.AreEqual(expected, File.ReadAllText input.FileName)
