@@ -118,16 +118,23 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
     let handleFixResult (ruleName: string) = function
         | LintResult.Success(warnings) ->
             Resources.GetString "ConsoleApplyingSuggestedFixFile" |> output.WriteInfo
+            let mutable countSuggestedFix = 0
             List.iter (fun (element: Suggestion.LintWarning) ->
                 let sourceCode = File.ReadAllText element.FilePath
-                match element.Details.SuggestedFix with
-                | Some suggestedFix when String.Equals(ruleName, element.RuleName, StringComparison.InvariantCultureIgnoreCase) ->
-                    suggestedFix.Force()
-                    |> Option.map (fun suggestedFix ->
-                        let updatedSourceCode = sourceCode.Replace(suggestedFix.FromText, suggestedFix.ToText)
-                        File.WriteAllText(element.FilePath, updatedSourceCode, Encoding.UTF8)) |> ignore
-                | _ -> ()) warnings
+                if String.Equals(ruleName, element.RuleName, StringComparison.InvariantCultureIgnoreCase) then
+                    match element.Details.SuggestedFix with
+                    | Some suggestedFix ->
+                        suggestedFix.Force()
+                        |> Option.map (fun suggestedFix ->
+                            let updatedSourceCode = sourceCode.Replace(suggestedFix.FromText, suggestedFix.ToText)
+                            File.WriteAllText(element.FilePath, updatedSourceCode, Encoding.UTF8)) 
+                            |> ignore |> fun () -> countSuggestedFix <-countSuggestedFix + 1
+                    | None -> ()
+                else
+                    ()) warnings
             outputWarnings warnings
+            if countSuggestedFix = 0 then
+                exitCode<-2
 
         | LintResult.Failure failure -> handleError -1 failure.Description
 
