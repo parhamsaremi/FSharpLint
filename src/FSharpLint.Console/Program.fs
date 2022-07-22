@@ -56,6 +56,7 @@ and private FixArgs =
     | [<MainCommand; Mandatory>] Fix_Target of ruleName:string * target:string
     | [<AltCommandLine("-l")>] Fix_Config of lintConfig:string
     | Fix_File_Type of FileType
+    | Check
 // fsharplint:enable UnionDefinitionIndentation
 with
     interface IArgParserTemplate with
@@ -64,6 +65,7 @@ with
             | Fix_Target _ -> "Rule name to be applied with suggestedFix and input to lint."
             | Fix_File_Type _ -> "Input type the linter will run against. If this is not set, the file type will be inferred from the file extension."
             | Fix_Config _ -> "Path to the config for the lint."
+            | Check _ -> "If passed to the fix command, the linter will only check if the fix is needed."
 // fsharplint:enable UnionCasesNames
 
 let private parserProgress (output:Output.IOutput) = function
@@ -185,6 +187,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         let fixParams = getParams fixConfig
         let ruleName, target = fixArgs.GetResult Fix_Target
         let fileType = fixArgs.TryGetResult Fix_File_Type |> Option.defaultValue (inferFileType target)
+        let check = fixArgs.Contains Check
         
         let enabledRules = 
             match getConfig fixParams.Configuration with
