@@ -154,3 +154,19 @@ printfn "Hello"
         let (exitCode, errors) = main [| "fix"; ruleName; input.FileName |]
 
         Assert.AreEqual(2, exitCode)
+
+    [<Test>]
+    member __.``Lint source with fix check option with no suggestion rule``() =
+        let sourceCode = """
+ try
+     foo ()
+ with
+ | ex ->
+     if someCondition then
+         raise ex """
+
+        let ruleName = "FavourReRaise"
+        use input = new TemporaryFile(sourceCode, "fs")
+        let (exitCode, errors) = main [| "fix"; ruleName; input.FileName; "--check" |]
+
+        Assert.AreEqual(2, exitCode)
