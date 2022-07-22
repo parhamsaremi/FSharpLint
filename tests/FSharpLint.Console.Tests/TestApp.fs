@@ -172,7 +172,7 @@ printfn "Hello"
         Assert.AreEqual(2, exitCode)
 
     [<Test>]
-    member __.``Lint source with fix check option with wrong rulename 22222``() =
+    member __.``Lint source with fix check option with wrong rulename``() =
         let sourceCode = """
 printfn "Hello"
         """
@@ -184,7 +184,7 @@ printfn "Hello"
         Assert.AreEqual(1, exitCode)
 
     [<Test>]
-    member __.``Lint source with fix check option 22223``() =
+    member __.``Lint source with fix check option``() =
         let sourceCode = """
 module Fass =
     let foo = new System.Collections.Generic.Dictionary<string, string>() |> ignore
