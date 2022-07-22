@@ -7,6 +7,7 @@ open System.Text
 open FSharpLint.Framework
 open FSharpLint.Application
 
+
 /// Output format the linter will use.
 type private OutputFormat =
     | Standard = 1
@@ -99,9 +100,9 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         | Some _
         | None -> Output.StandardOutput() :> Output.IOutput
 
-    let handleError (str:string) =
+    let handleError (status:int) (str:string) =
         output.WriteError str
-        exitCode <- -1
+        exitCode <- status
 
     let outputWarnings (warnings:list<Suggestion.LintWarning>) =
         String.Format(Resources.GetString("ConsoleFinished"), List.length warnings)
@@ -112,11 +113,10 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
             outputWarnings warnings
             if List.isEmpty warnings |> not then 
                exitCode <- -1
-        | LintResult.Failure failure -> handleError failure.Description
+        | LintResult.Failure failure -> handleError -1 failure.Description
     
     let handleFixResult (ruleName: string) = function
         | LintResult.Success(warnings) ->
-            let mutable count = 0
             Resources.GetString "ConsoleApplyingSuggestedFixFile" |> output.WriteInfo
             List.iter (fun (element: Suggestion.LintWarning) ->
                 let sourceCode = File.ReadAllText element.FilePath
@@ -126,13 +126,10 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
                     |> Option.map (fun suggestedFix ->
                         let updatedSourceCode = sourceCode.Replace(suggestedFix.FromText, suggestedFix.ToText)
                         File.WriteAllText(element.FilePath, updatedSourceCode, Encoding.UTF8)) |> ignore
-                | _ -> count <- count + 1) warnings
+                | _ -> ()) warnings
             outputWarnings warnings
-            if count > 0 then
-                exitCode <- 1
-            else
-                exitCode <- 0
-        | LintResult.Failure failure -> handleError failure.Description
+
+        | LintResult.Failure failure -> handleError -1 failure.Description
 
     let linting fileType lintParams target toolsPath shouldFix maybeRuleName =
         try
@@ -153,7 +150,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         | e ->
             let target = if fileType = FileType.Source then "source" else target
             sprintf "Lint failed while analysing %s.\nFailed with: %s\nStack trace: %s" target e.Message e.StackTrace
-            |> handleError
+            |> (handleError -1)
 
     let getParams config =
         let paramConfig =
@@ -181,7 +178,25 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         let fixParams = getParams fixConfig
         let ruleName, target = fixArgs.GetResult Fix_Target
         let fileType = fixArgs.TryGetResult Fix_File_Type |> Option.defaultValue (inferFileType target)
-        linting fileType fixParams target toolsPath true (Some ruleName)
+        
+        let enabledRules = 
+            match getConfig fixParams.Configuration with
+            | Ok config -> Some (Configuration.flattenConfig config)
+            | _ -> None
+        let allRuleNames =
+            match enabledRules with
+            | Some rules ->  (fun (x:Configuration.LoadedRules) -> ([|
+                    x.LineRules.IndentationRule |> Option.map (fun rule -> rule.Name) |> Option.toArray
+                    x.LineRules.NoTabCharactersRule |> Option.map (fun rule -> rule.Name) |> Option.toArray
+                    x.LineRules.GenericLineRules |> Array.map (fun rule -> rule.Name)
+                    x.AstNodeRules |> Array.map (fun rule -> rule.Name)
+                |] |> Array.concat |> Set.ofArray)) rules
+            | _ -> Set.empty
+        
+        if allRuleNames.Contains ruleName then
+            linting fileType fixParams target toolsPath true (Some ruleName)
+        else
+            sprintf "Rule '%s' is not enabled in the configuration." ruleName |> (handleError 1)
 
     match arguments.GetSubCommand() with
     | Lint lintArgs -> applyLint lintArgs
