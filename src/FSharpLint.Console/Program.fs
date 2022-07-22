@@ -61,7 +61,7 @@ with
     interface IArgParserTemplate with
         member this.Usage =
             match this with
-            | Fix_Target _ -> "Rule name or names (comma seperated) to be applied with suggestedFix and input to lint."
+            | Fix_Target _ -> "Rule name to be applied with suggestedFix and input to lint."
             | Fix_File_Type _ -> "Input type the linter will run against. If this is not set, the file type will be inferred from the file extension."
             | Fix_Config _ -> "Path to the config for the lint."
 // fsharplint:enable UnionCasesNames
