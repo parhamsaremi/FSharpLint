@@ -140,7 +140,7 @@ printfn "Hello"
         Assert.AreEqual(1, exitCode)
     
     [<Test>]
-    member __.``Lint source with fix option with no suggestion rule 22222``() =
+    member __.``Lint source with fix option with no suggestion rule``() =
         let sourceCode = """
  try
      foo ()
