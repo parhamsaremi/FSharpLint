@@ -56,6 +56,7 @@ and private FixArgs =
     | [<MainCommand; Mandatory>] Fix_Target of ruleName:string * target:string
     | [<AltCommandLine("-l")>] Fix_Config of lintConfig:string
     | Fix_File_Type of FileType
+    | Check
 // fsharplint:enable UnionDefinitionIndentation
 with
     interface IArgParserTemplate with
@@ -64,6 +65,7 @@ with
             | Fix_Target _ -> "Rule name to be applied with suggestedFix and input to lint."
             | Fix_File_Type _ -> "Input type the linter will run against. If this is not set, the file type will be inferred from the file extension."
             | Fix_Config _ -> "Path to the config for the lint."
+            | Check _ -> "If passed to the fix command, the linter will only check if the fix is needed."
 // fsharplint:enable UnionCasesNames
 
 let private parserProgress (output:Output.IOutput) = function
@@ -115,7 +117,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
                exitCode <- -1
         | LintResult.Failure failure -> handleError -1 failure.Description
     
-    let handleFixResult (ruleName: string) = function
+    let handleFixResult (ruleName: string) (check: bool) = function
         | LintResult.Success(warnings) ->
             Resources.GetString "ConsoleApplyingSuggestedFixFile" |> output.WriteInfo
             let mutable countSuggestedFix = 0
@@ -124,11 +126,15 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
                 if String.Equals(ruleName, element.RuleName, StringComparison.InvariantCultureIgnoreCase) then
                     match element.Details.SuggestedFix with
                     | Some suggestedFix ->
-                        suggestedFix.Force()
-                        |> Option.map (fun suggestedFix ->
-                            let updatedSourceCode = sourceCode.Replace(suggestedFix.FromText, suggestedFix.ToText)
-                            File.WriteAllText(element.FilePath, updatedSourceCode, Encoding.UTF8)) 
-                            |> ignore |> fun () -> countSuggestedFix <-countSuggestedFix + 1
+                        ((fun check -> 
+                        if not check then 
+                            (suggestedFix.Force()
+                            |> Option.map (fun suggestedFix ->
+                                let updatedSourceCode = sourceCode.Replace(suggestedFix.FromText, suggestedFix.ToText)
+                                File.WriteAllText(element.FilePath, updatedSourceCode, Encoding.UTF8)) |> ignore)
+                        else 
+                            ())
+                        check) |> fun () -> countSuggestedFix <-countSuggestedFix + 1
                     | None -> ()
                 else
                     ()) warnings
@@ -138,7 +144,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
 
         | LintResult.Failure failure -> handleError -1 failure.Description
 
-    let linting fileType lintParams target toolsPath shouldFix maybeRuleName =
+    let linting fileType lintParams target toolsPath shouldFix maybeRuleName check =
         try
             let lintResult =
                 match fileType with
@@ -149,7 +155,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
                 | _ -> Lint.lintProject lintParams target toolsPath
             if shouldFix then
                 match maybeRuleName with
-                | Some ruleName -> handleFixResult ruleName lintResult
+                | Some ruleName -> handleFixResult ruleName check lintResult
                 | None -> exitCode <- 1
             else
                 handleLintResult lintResult
@@ -177,7 +183,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         let target = lintArgs.GetResult Target
         let fileType = lintArgs.TryGetResult File_Type |> Option.defaultValue (inferFileType target)
 
-        linting fileType lintParams target toolsPath false None
+        linting fileType lintParams target toolsPath false None false
 
     let applySuggestedFix (fixArgs: ParseResults<FixArgs>) =
         let fixConfig = fixArgs.TryGetResult Fix_Config
@@ -185,6 +191,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         let fixParams = getParams fixConfig
         let ruleName, target = fixArgs.GetResult Fix_Target
         let fileType = fixArgs.TryGetResult Fix_File_Type |> Option.defaultValue (inferFileType target)
+        let check = fixArgs.Contains Check
         
         let enabledRules = 
             match getConfig fixParams.Configuration with
@@ -201,7 +208,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
             | _ -> Set.empty
         
         if allRuleNames.Contains ruleName then
-            linting fileType fixParams target toolsPath true (Some ruleName)
+            linting fileType fixParams target toolsPath true (Some ruleName) check
         else
             sprintf "Rule '%s' is not enabled in the configuration." ruleName |> (handleError 1)
 
