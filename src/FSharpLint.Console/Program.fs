@@ -20,6 +20,13 @@ type private FileType =
     | File = 3
     | Source = 4
 
+type private ExitCode = 
+    | Error = -1
+    | Success = 0
+    | NoSuchRuleName = 1
+    | NoSuggestedFix = 2
+    | FixExists = 3 //only for fix --check
+
 let fileTypeHelp = "Input type the linter will run against. If this is not set, the file type will be inferred from the file extension."
 
 // Allowing underscores in union case names for proper Argu command line option formatting.
@@ -57,6 +64,7 @@ with
 and private FixArgs =
     | [<MainCommand; Mandatory>] Fix_Target of ruleName:string * target:string
     | Fix_File_Type of FileType
+    | Check
 // fsharplint:enable UnionDefinitionIndentation
 with
     interface IArgParserTemplate with
@@ -64,6 +72,7 @@ with
             match this with
             | Fix_Target _ -> "Rule name to be applied with suggestedFix and input to lint."
             | Fix_File_Type _ -> fileTypeHelp
+            | Check _ -> "If passed to the fix command, the linter will only check if the fix is needed."
 // fsharplint:enable UnionCasesNames
 
 let private parserProgress (output:Output.IOutput) = function
@@ -91,7 +100,7 @@ let private inferFileType (target:string) =
         FileType.Source
 
 let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.Types.ToolsPath) =
-    let mutable exitCode = 0
+    let mutable exitCode = ExitCode.Success
 
     let output =
         match arguments.TryGetResult Format with
@@ -100,7 +109,7 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         | Some _
         | None -> Output.StandardOutput() :> Output.IOutput
 
-    let handleError (status:int) (str:string) =
+    let handleError (status: ExitCode) (str: string) =
         output.WriteError str
         exitCode <- status
 
@@ -112,12 +121,13 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         | LintResult.Success warnings ->
             outputWarnings warnings
             if List.isEmpty warnings |> not then 
-               exitCode <- -1
-        | LintResult.Failure failure -> handleError -1 failure.Description
+               exitCode <- ExitCode.Error
+        | LintResult.Failure failure -> handleError (ExitCode.Error) failure.Description
     
-    let handleFixResult (ruleName: string) = function
+    let handleFixResult (ruleName: string) (checkFlag: bool) = function
         | LintResult.Success warnings ->
-            Resources.GetString "ConsoleApplyingSuggestedFixFile" |> output.WriteInfo
+            if checkFlag |> not then
+                Resources.GetString "ConsoleApplyingSuggestedFixFile" |> output.WriteInfo
             let increment = 1
             let noFixIncrement = 0
             let countSuggestedFix = 
@@ -127,27 +137,35 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
                         if String.Equals(ruleName, element.RuleName, StringComparison.InvariantCultureIgnoreCase) then
                             match element.Details.SuggestedFix with
                             | Some suggestedFix ->
-                                suggestedFix.Force()
-                                |> Option.map (fun suggestedFix ->
-                                    let updatedSourceCode = 
-                                        sourceCode.Replace(
-                                            suggestedFix.FromText,
-                                            suggestedFix.ToText
+                                ((fun checkFlag ->
+                                if not checkFlag then
+                                    (suggestedFix.Force()
+                                    |> Option.map (fun suggestedFix ->
+                                        let updatedSourceCode = 
+                                            sourceCode.Replace(
+                                                suggestedFix.FromText,
+                                                suggestedFix.ToText
+                                            )
+                                        File.WriteAllText(
+                                            element.FilePath,
+                                            updatedSourceCode,
+                                            Encoding.UTF8)
                                         )
-                                    File.WriteAllText(
-                                        element.FilePath,
-                                        updatedSourceCode,
-                                        Encoding.UTF8)
-                                    ) 
-                                    |> ignore |> fun () -> increment
+                                    ) |> ignore
+                                else
+                                    ()
+                                ) checkFlag)
+                                |> ignore |> fun () -> increment
                             | None -> noFixIncrement
                         else
                             noFixIncrement) warnings)
             outputWarnings warnings
+            if checkFlag && countSuggestedFix > 0 then
+                exitCode <- ExitCode.FixExists
 
-        | LintResult.Failure failure -> handleError -1 failure.Description
+        | LintResult.Failure failure -> handleError ExitCode.Error failure.Description
 
-    let linting fileType lintParams target toolsPath shouldFix maybeRuleName =
+    let linting fileType lintParams target toolsPath shouldFix maybeRuleName checkFlag =
         try
             let lintResult =
                 match fileType with
@@ -158,15 +176,15 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
                 | _ -> Lint.lintProject lintParams target toolsPath
             if shouldFix then
                 match maybeRuleName with
-                | Some ruleName -> handleFixResult ruleName lintResult
-                | None -> exitCode <- 1
+                | Some ruleName -> handleFixResult ruleName checkFlag lintResult
+                | None -> exitCode <- ExitCode.NoSuchRuleName
             else
                 handleLintResult lintResult
         with
         | e ->
             let target = if fileType = FileType.Source then "source" else target
             sprintf "Lint failed while analysing %s.\nFailed with: %s\nStack trace: %s" target e.Message e.StackTrace
-            |> (handleError -1)
+            |> (handleError ExitCode.Error)
 
     let getParams config =
         let paramConfig =
@@ -186,12 +204,13 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
         let target = lintArgs.GetResult Target
         let fileType = lintArgs.TryGetResult File_Type |> Option.defaultValue (inferFileType target)
 
-        linting fileType lintParams target toolsPath false None
+        linting fileType lintParams target toolsPath false None false
 
     let applySuggestedFix (fixArgs: ParseResults<FixArgs>) =
         let fixParams = getParams None
         let ruleName, target = fixArgs.GetResult Fix_Target
         let fileType = fixArgs.TryGetResult Fix_File_Type |> Option.defaultValue (inferFileType target)
+        let checkFlag = fixArgs.Contains Check
         
         let allRules = 
             match getConfig fixParams.Configuration with
@@ -209,16 +228,16 @@ let private start (arguments:ParseResults<ToolArgs>) (toolsPath:Ionide.ProjInfo.
             | _ -> Set.empty
 
         if allRuleNames.Any(fun aRuleName -> String.Equals(aRuleName, ruleName, StringComparison.InvariantCultureIgnoreCase)) then
-            linting fileType fixParams target toolsPath true (Some ruleName)
+            linting fileType fixParams target toolsPath true (Some ruleName) checkFlag
         else
-            sprintf "Rule '%s' does not exist." ruleName |> (handleError 1)
+            sprintf "Rule '%s' does not exist." ruleName |> (handleError ExitCode.NoSuchRuleName)
 
     match arguments.GetSubCommand() with
     | Lint lintArgs -> applyLint lintArgs
     | Fix fixArgs -> applySuggestedFix fixArgs
     | _ -> ()
 
-    exitCode
+    int exitCode
     
 /// Must be called only once per process.
 /// We're calling it globally so we can call main multiple times from our tests.
