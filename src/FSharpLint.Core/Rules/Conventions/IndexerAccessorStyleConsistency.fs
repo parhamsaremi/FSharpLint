@@ -14,7 +14,7 @@ type Config = {
 
 let generateOutput (range: FSharp.Compiler.Text.Range) (styleMain: string) (styleError: string) =
     { Range = range
-      Message = String.Format ("You must use %s styling instead of %s for indexer accessing", styleMain, styleError)
+      Message = sprintf "You must use %s styling instead of %s for indexer accessing" styleMain styleError
       SuggestedFix = None
       TypeChecks = List.Empty } |> Array.singleton
 
@@ -43,7 +43,7 @@ let runner (config: Config) (args: AstNodeRuleParams) =
         | _ -> 
             Array.empty
     else
-        failwith (String.Format("Unknown style type %s", styleType))
+        failwith (sprintf "Unknown style type %s" styleType)
 
 let rule config =
     { Name = "IndexerAccessorStyleConsistency"
