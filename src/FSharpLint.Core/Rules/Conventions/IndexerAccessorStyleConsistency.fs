@@ -5,6 +5,7 @@ open FSharpLint.Framework.Ast
 open FSharpLint.Framework.AstInfo
 open FSharpLint.Framework.Rules
 open FSharpLint.Framework.Suggestion
+open FSharpLint.Framework
 open System
 
 [<RequireQualifiedAccess>]
@@ -12,9 +13,9 @@ type Config = {
     Style: string
 }
 
-let generateOutput (range: FSharp.Compiler.Text.Range) (styleMain: string) (styleError: string) =
+let generateOutput (range: FSharp.Compiler.Text.Range) =
     { Range = range
-      Message = sprintf "You must use %s styling instead of %s for indexer accessing" styleMain styleError
+      Message = Resources.GetString "RulesIndexerAccessorStyleConsistency"
       SuggestedFix = None
       TypeChecks = List.Empty } |> Array.singleton
 
@@ -26,7 +27,7 @@ let runner (config: Config) (args: AstNodeRuleParams) =
             match binding with
             | SynBinding (_, _, _, _, _, _, _, SynPat.Named _, _
                 , SynExpr.App (ExprAtomicFlag.Atomic, _, SynExpr.Ident _, SynExpr.ArrayOrListOfSeqExpr (_, expr, range), _), _, _) ->
-                generateOutput range "OCaml" "CSharp"
+                generateOutput range
             | _ ->
                 Array.empty
         | _ -> 
@@ -37,7 +38,7 @@ let runner (config: Config) (args: AstNodeRuleParams) =
             match binding with
             | SynBinding (_, _, _, _, _, _, _, SynPat.Named _, _
                 , SynExpr.DotIndexedGet (_, _, _, range), _, _) ->
-                generateOutput range "CSharp" "OCaml"
+                generateOutput range
             | _ ->
                 Array.empty
         | _ -> 
