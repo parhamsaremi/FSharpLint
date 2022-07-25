@@ -43,7 +43,7 @@ let runner (config: Config) (args: AstNodeRuleParams) =
         | _ -> 
             Array.empty
     else
-        failwith (sprintf "Unknown style type %s" styleType)
+        failwithf "Unknown style type %s" styleType
 
 let rule config =
     { Name = "IndexerAccessorStyleConsistency"
